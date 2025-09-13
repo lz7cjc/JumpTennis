@@ -1,0 +1,57 @@
+# Unity defaults
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Large files
+*.mp4
+*.mov
+*.wav
+*.mp3
+*.zip
+*.unitypackage
+
+Assets/StreamingAssets/
+
+
+Assets/Samples/
+g i t - f i l t e r - r e p o 
+ 
+ *api_key*
+*secret*
+
+# Large files commonly used in Unity
+*.fbx
+*.dae
+*.obj
+*.tga
+*.psd
+*.jpg
+*.png
+*.exr
+*.tiff
+*.hdr
+# Ignore asset bundles
+*.bundle
+
+# Ignore Unity's cache and temporary files
+[Cc]ache/
+[Cc]ache2/
+
+# Ignore generated files from the editor
+.vs/
+.vscode/
+.idea/
+.user/
+.userprefs/
+*.suo
+*.user
+# Unity Collaborate and cloud sync files
+.collab/
+.gi/
+
+
