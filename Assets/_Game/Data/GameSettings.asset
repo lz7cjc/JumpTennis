@@ -17,24 +17,42 @@ MonoBehaviour:
   - 1.5
   - 0
   - -1.5
-  baseBallSpeed: 3
-  speedIncreasePerLevel: 0.1
-  perfectTimingWindow: 0.2
-  secondBallLevel: 6
-  thirdBallLevel: 11
-  maxBalls: 5
+  baseBallSpeed: 1
+  ballSpeedIncrease: 0.1
   ballSpawnDelay: 2
-  hitPoints: 10
+  perfectTimingWindow: 0.2
+  hitWindowStart: 0.7
+  hitWindowEnd: 1
+  trailLifetime: 1
+  maxBalls: 5
+  twoBallLevel: 6
+  threeBallLevel: 11
+  minSpawnInterval: 1
+  maxSpawnInterval: 3
+  baseHitPoints: 10
   perfectHitBonus: 5
   comboMultiplier: 1.5
   maxComboMultiplier: 5
+  comboDecayTime: 6
+  hitsPerComboTier: 3
+  startingLives: 3
+  maxLives: 5
+  pointsPerLevel: 100
+  difficultyRampRate: 1.2
+  spawnIntervalDecrease: 0.05
   topPositionColor: {r: 1, g: 0, b: 0, a: 1}
   middlePositionColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
   bottomPositionColor: {r: 0, g: 0, b: 1, a: 1}
-  trailLifetime: 1
-  masterVolume: 1
-  sfxVolume: 1
-  musicVolume: 0.7
-  targetFrameRate: 60
-  enableParticleEffects: 1
-  maxParticles: 100
+  hitSuccessColor: {r: 1, g: 1, b: 1, a: 1}
+  hitFailColor: {r: 1, g: 0, b: 0, a: 1}
+  wrongPositionColor: {r: 1, g: 0, b: 1, a: 1}
+  missColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  hitFlashDuration: 0.2
+  hitScaleMultiplier: 1.3
+  ballGrowthDuration: 0.15
+  hitSoundVolume: 0.8
+  missSoundVolume: 0.6
+  uiSoundVolume: 0.5
+  enableDebugLogs: 1
+  showDebugGizmos: 1
+  enableManualSpawning: 1

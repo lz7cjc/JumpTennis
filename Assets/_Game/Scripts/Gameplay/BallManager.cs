@@ -12,6 +12,13 @@ public class BallManager : MonoBehaviour
     [SerializeField] private Transform ballSpawnPoint;
     [SerializeField] private PlayerController player;
 
+    [Header("Progressive Difficulty")]
+    [SerializeField] private float baseSpawnInterval = 2.0f;
+    [SerializeField] private float minSpawnInterval = 0.8f;
+    [SerializeField] private float spawnIntervalReduction = 0.05f; // Per level
+    [SerializeField] private float currentSpawnInterval;
+    [SerializeField] private int targetBallCount = 1;
+
     [Header("Debug Info")]
     [SerializeField] private int activeBalls = 0;
     [SerializeField] private int ballsSpawned = 0;
@@ -24,6 +31,9 @@ public class BallManager : MonoBehaviour
     // Spawning control
     private Coroutine spawnCoroutine;
 
+    // Progressive difficulty
+    private ScoreManager scoreManager;
+
     // Events
     public System.Action<Ball> OnBallHit;
     public System.Action<Ball> OnBallMissed;
@@ -31,6 +41,36 @@ public class BallManager : MonoBehaviour
 
     void Start()
     {
+        // Get ScoreManager reference
+        scoreManager = FindFirstObjectByType<ScoreManager>();
+        if (scoreManager != null)
+        {
+            Debug.Log("ScoreManager found, subscribing to OnLevelUp event");
+            ScoreManager.OnLevelUp += UpdateDifficulty;
+        }
+        else
+        {
+            Debug.LogError("ScoreManager not found!");
+        }
+
+        // Initialize spawn interval
+        currentSpawnInterval = baseSpawnInterval;
+
+        // Test ScoreManager methods
+        if (scoreManager != null)
+        {
+            try
+            {
+                float testSpeed = scoreManager.GetCurrentBallSpeed();
+                int testCount = scoreManager.GetBallCountForLevel();
+                Debug.Log($"ScoreManager methods working: Speed={testSpeed}, Count={testCount}");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"ScoreManager methods failed: {e.Message}");
+            }
+        }
+
         // Validate references
         if (gameSettings == null)
         {
@@ -69,14 +109,44 @@ public class BallManager : MonoBehaviour
         {
             player.OnHitAttempt -= HandlePlayerHitAttempt;
         }
+
+        // Unsubscribe from ScoreManager events
+        ScoreManager.OnLevelUp -= UpdateDifficulty;
     }
+
+    #region Progressive Difficulty
+
+    private void UpdateDifficulty()
+    {
+        if (scoreManager == null) return;
+
+        // Get current ball speed to estimate level
+        float currentSpeed = scoreManager.GetCurrentBallSpeed();
+        int estimatedLevel = Mathf.Max(1, Mathf.RoundToInt((currentSpeed - 3.0f) / 0.1f) + 1);
+
+        // Update spawn interval (faster spawning at higher levels)
+        currentSpawnInterval = Mathf.Max(
+            minSpawnInterval,
+            baseSpawnInterval - (estimatedLevel * spawnIntervalReduction)
+        );
+
+        // Update target ball count based on level
+        targetBallCount = scoreManager.GetBallCountForLevel();
+
+        Debug.Log($"Difficulty updated for Level {estimatedLevel}: " +
+                 $"Spawn Interval: {currentSpawnInterval:F2}s, " +
+                 $"Target Ball Count: {targetBallCount}, " +
+                 $"Ball Speed: {currentSpeed:F2}");
+    }
+
+    #endregion
 
     #region Ball Pool Management
 
     void InitializeBallPool()
     {
-        // Create initial pool of balls
-        int initialPoolSize = gameSettings.maxBalls + 2;
+        // Create initial pool of balls - increase for multi-ball levels
+        int initialPoolSize = Mathf.Max(gameSettings.maxBalls + 2, 8);
 
         for (int i = 0; i < initialPoolSize; i++)
         {
@@ -148,8 +218,8 @@ public class BallManager : MonoBehaviour
             StopCoroutine(spawnCoroutine);
         }
 
+        isSpawning = true;  // Set this BEFORE starting coroutine
         spawnCoroutine = StartCoroutine(SpawnBallsCoroutine());
-        isSpawning = true;
         Debug.Log("Ball spawning started");
     }
 
@@ -167,32 +237,67 @@ public class BallManager : MonoBehaviour
 
     IEnumerator SpawnBallsCoroutine()
     {
+        Debug.Log("SpawnBallsCoroutine started");
+
         while (isSpawning)
         {
-            // Check if we should spawn a new ball
+            Debug.Log("Spawn coroutine loop iteration");
+
+            // Check if we should spawn balls
             if (ShouldSpawnBall())
             {
-                SpawnRandomBall();
-                yield return new WaitForSeconds(gameSettings.ballSpawnDelay);
+                int ballsToSpawn = targetBallCount - activeBalls;
+
+                Debug.Log($"Spawning {ballsToSpawn} balls automatically (Target: {targetBallCount}, Active: {activeBalls})");
+
+                // Spawn multiple balls if needed (for multi-ball levels)
+                for (int i = 0; i < ballsToSpawn && i < 3; i++)
+                {
+                    SpawnRandomBall();
+
+                    // Small delay between simultaneous spawns for visual clarity
+                    if (i < ballsToSpawn - 1)
+                    {
+                        yield return new WaitForSeconds(0.3f);
+                    }
+                }
+
+                // Wait for current spawn interval after spawning
+                Debug.Log($"Waiting {currentSpawnInterval} seconds before next spawn check");
+                yield return new WaitForSeconds(currentSpawnInterval);
             }
             else
             {
-                yield return new WaitForSeconds(0.1f); // Check again soon
+                Debug.Log("No spawn needed, checking again in 0.1s");
+                // Check again soon if no spawning needed
+                yield return new WaitForSeconds(0.1f);
             }
         }
+
+        Debug.Log("SpawnBallsCoroutine ended");
     }
 
     bool ShouldSpawnBall()
     {
-        // Don't exceed max balls
-        if (activeBalls >= gameSettings.maxBalls)
+        if (gameSettings == null)
         {
+            Debug.LogError("GameSettings is null! Cannot determine spawn rules.");
             return false;
         }
 
-        // Simple rule: always keep at least 1 ball active for testing
-        // Later this will be controlled by level progression
-        return activeBalls == 0;
+        Debug.Log($"ShouldSpawnBall check: activeBalls={activeBalls}, maxBalls={gameSettings.maxBalls}, targetBallCount={targetBallCount}");
+
+        // Don't exceed max balls
+        if (activeBalls >= gameSettings.maxBalls)
+        {
+            Debug.Log("Not spawning: at max balls limit");
+            return false;
+        }
+
+        // Spawn if we have fewer active balls than target count
+        bool shouldSpawn = activeBalls < targetBallCount;
+        Debug.Log($"Should spawn: {shouldSpawn} (need {targetBallCount - activeBalls} more balls)");
+        return shouldSpawn;
     }
 
     void SpawnRandomBall()
@@ -204,7 +309,9 @@ public class BallManager : MonoBehaviour
         Vector3 spawnPos = ballSpawnPoint != null ? ballSpawnPoint.position :
                           new Vector3(5f, gameSettings.playerPositions[randomPosition], 0f);
 
-        SpawnBall(spawnPos, randomPosition);
+        // Use progressive difficulty speed
+        float ballSpeed = scoreManager != null ? scoreManager.GetCurrentBallSpeed() : gameSettings.baseBallSpeed;
+        SpawnBall(spawnPos, randomPosition, ballSpeed);
     }
 
     public void SpawnBall(Vector3 fromPosition, int targetPosition, float speed = -1f)
@@ -216,8 +323,11 @@ public class BallManager : MonoBehaviour
             return;
         }
 
+        // Use progressive difficulty speed if not specified
+        float ballSpeed = speed > 0 ? speed :
+                         (scoreManager != null ? scoreManager.GetCurrentBallSpeed() : gameSettings.baseBallSpeed);
+
         // Launch the ball
-        float ballSpeed = speed > 0 ? speed : gameSettings.baseBallSpeed;
         ball.LaunchBall(fromPosition, targetPosition, ballSpeed);
 
         // Add to active list
@@ -229,7 +339,7 @@ public class BallManager : MonoBehaviour
         activeBalls = activeBallsList.Count;
         ballsSpawned++;
 
-        Debug.Log($"Ball spawned #{ballsSpawned}, active balls: {activeBalls}");
+        Debug.Log($"Ball spawned #{ballsSpawned} at speed {ballSpeed:F2}, active balls: {activeBalls}");
     }
 
     #endregion
@@ -263,18 +373,15 @@ public class BallManager : MonoBehaviour
     void HandleBallHit(Ball ball)
     {
         Debug.Log("Ball hit successfully!");
-        // Don't immediately return to pool - let the ball's hit effect play first
-        // The ball will deactivate itself after the visual effect
         OnBallHit?.Invoke(ball);
 
         // Remove from active list but don't deactivate yet
+        // The ball will deactivate itself after the visual effect
         if (activeBallsList.Contains(ball))
         {
             activeBallsList.Remove(ball);
             activeBalls = activeBallsList.Count;
         }
-
-        // TODO: Add scoring, effects, etc.
     }
 
     void HandleBallMissed(Ball ball)
@@ -282,13 +389,10 @@ public class BallManager : MonoBehaviour
         Debug.Log("Ball was missed!");
         ReturnBallToPool(ball);
         OnBallMissed?.Invoke(ball);
-
-        // TODO: Reduce lives, game over check, etc.
     }
 
     void HandleBallReachPlayer(Ball ball)
     {
-        // Ball reached player position, final check
         Debug.Log("Ball reached player zone");
     }
 
@@ -353,6 +457,18 @@ public class BallManager : MonoBehaviour
     public int GetActiveBallCount() => activeBalls;
     public int GetTotalBallsSpawned() => ballsSpawned;
     public bool IsSpawning() => isSpawning;
+
+    // Progressive difficulty getters
+    public float GetCurrentSpawnInterval() => currentSpawnInterval;
+    public int GetTargetBallCount() => targetBallCount;
+
+    // Reset difficulty for new game
+    public void ResetDifficulty()
+    {
+        currentSpawnInterval = baseSpawnInterval;
+        targetBallCount = 1;
+        ClearAllBalls();
+    }
 
     #endregion
 

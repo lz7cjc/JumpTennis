@@ -56,6 +56,13 @@ public class ScoreManager : MonoBehaviour
         pointsInCurrentLevel = 0;
         lastHitTime = 0f;
 
+        // Stop any existing combo decay coroutine
+        if (comboDecayCoroutine != null)
+        {
+            StopCoroutine(comboDecayCoroutine);
+            comboDecayCoroutine = null;
+        }
+
         // Notify UI of initial values
         OnScoreChanged?.Invoke(currentScore);
         OnLevelChanged?.Invoke(currentLevel);
@@ -68,6 +75,7 @@ public class ScoreManager : MonoBehaviour
     public void RegisterHit(bool isPerfectTiming)
     {
         lastHitTime = Time.time;
+        Debug.Log($"RegisterHit called - Perfect: {isPerfectTiming}");
 
         // Calculate base points
         int basePoints = gameSettings.baseHitPoints;
@@ -76,8 +84,10 @@ public class ScoreManager : MonoBehaviour
             basePoints += gameSettings.perfectHitBonus;
         }
 
-        // Update combo
+        // Update combo FIRST
         currentCombo++;
+        Debug.Log($"Combo incremented to: {currentCombo}");
+
         UpdateComboMultiplier();
 
         // Calculate final score with combo multiplier
@@ -107,6 +117,7 @@ public class ScoreManager : MonoBehaviour
 
     public void RegisterMiss()
     {
+        Debug.Log("RegisterMiss called");
         currentLives--;
         ResetCombo();
 
@@ -122,20 +133,27 @@ public class ScoreManager : MonoBehaviour
 
     private void UpdateComboMultiplier()
     {
+        // Debug the GameSettings values
+        Debug.Log($"GameSettings - hitsPerComboTier: {gameSettings.hitsPerComboTier}, comboMultiplier: {gameSettings.comboMultiplier}");
+
         // Combo multiplier increases every few hits, capped at max
         int comboTiers = currentCombo / gameSettings.hitsPerComboTier;
-        currentComboMultiplier = 1f + (comboTiers * (gameSettings.comboMultiplier - 1f));
-        currentComboMultiplier = Mathf.Min(currentComboMultiplier, gameSettings.maxComboMultiplier);
+        float newMultiplier = 1f + (comboTiers * (gameSettings.comboMultiplier - 1f));
+        currentComboMultiplier = Mathf.Min(newMultiplier, gameSettings.maxComboMultiplier);
+
+        Debug.Log($"COMBO DEBUG: currentCombo={currentCombo}, comboTiers={comboTiers}, newMultiplier={newMultiplier}, finalMultiplier={currentComboMultiplier}");
     }
 
     private void ResetCombo()
     {
+        Debug.Log($"ResetCombo called - was at combo {currentCombo}");
         currentCombo = 0;
         currentComboMultiplier = 1f;
 
         if (comboDecayCoroutine != null)
         {
             StopCoroutine(comboDecayCoroutine);
+            comboDecayCoroutine = null;
         }
 
         OnComboChanged?.Invoke(currentCombo, currentComboMultiplier);
@@ -144,12 +162,18 @@ public class ScoreManager : MonoBehaviour
 
     private IEnumerator ComboDecayTimer()
     {
+        Debug.Log($"ComboDecayTimer started - will decay after {gameSettings.comboDecayTime} seconds");
         yield return new WaitForSeconds(gameSettings.comboDecayTime);
 
         // Check if enough time has passed since last hit
         if (Time.time - lastHitTime >= gameSettings.comboDecayTime)
         {
+            Debug.Log("Combo decayed due to timeout");
             ResetCombo();
+        }
+        else
+        {
+            Debug.Log("Combo decay cancelled - hit occurred during timer");
         }
     }
 
@@ -178,6 +202,7 @@ public class ScoreManager : MonoBehaviour
 
     public void RestartGame()
     {
+        Debug.Log("RestartGame called");
         InitializeGame();
         Debug.Log("Game restarted!");
     }
@@ -237,5 +262,15 @@ public class ScoreManager : MonoBehaviour
     private void TestMiss()
     {
         RegisterMiss();
+    }
+
+    // Additional debug method for combo testing
+    [ContextMenu("Test 5 Hits")]
+    private void Test5Hits()
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            RegisterHit(false);
+        }
     }
 }

@@ -34,6 +34,8 @@ public class Ball : MonoBehaviour
     public System.Action<Ball> OnBallMissed;
     public System.Action<Ball> OnBallHit;
     public System.Action<Ball> OnBallReachPlayer;
+    // NEW: Event for progressive difficulty integration
+    public System.Action<GameObject> OnBallCompleted;
 
     void Awake()
     {
@@ -208,6 +210,10 @@ public class Ball : MonoBehaviour
         }
 
         OnBallHit?.Invoke(this);
+
+        // NEW: Trigger completion event for BallManager
+        OnBallCompleted?.Invoke(gameObject);
+
         Debug.Log($"Perfect hit at {GetPositionName(targetPosition)}! Perfect timing: {isPerfectTiming}");
 
         // Add visual feedback for successful hit
@@ -227,6 +233,10 @@ public class Ball : MonoBehaviour
             }
 
             OnBallMissed?.Invoke(this);
+
+            // ADD THIS LINE - Trigger completion event for BallManager  
+            OnBallCompleted?.Invoke(gameObject);
+
             Debug.Log($"Ball missed at {GetPositionName(targetPosition)} position!");
 
             // Add visual feedback for complete miss
@@ -236,7 +246,6 @@ public class Ball : MonoBehaviour
 
         DeactivateBall();
     }
-
     private bool IsInPerfectTimingWindow()
     {
         if (gameSettings == null) return false;
@@ -420,6 +429,17 @@ public class Ball : MonoBehaviour
     public int GetTargetPosition() => targetPosition;
     public float GetDistanceToPlayer() => distanceToPlayer;
     public float GetProgress() => journeyTime > 0 ? elapsedTime / journeyTime : 0f;
+
+    // NEW: Progressive difficulty methods
+    public void SetSpeed(float speed)
+    {
+        currentSpeed = speed;
+    }
+
+    public float GetCurrentSpeed()
+    {
+        return currentSpeed;
+    }
 
     #endregion
 
