@@ -15,7 +15,7 @@ public class Ball : MonoBehaviour
     [SerializeField] private float distanceToPlayer = 0f;
     [SerializeField] private bool canBeHit = false;
 
-    // Movement
+    // Movement - SIMPLIFIED TO DIRECT TRAJECTORY
     private Vector3 startPosition;
     private Vector3 targetWorldPosition;
     private float journeyLength;
@@ -30,12 +30,11 @@ public class Ball : MonoBehaviour
     private PlayerController player;
     private ScoreManager scoreManager;
 
-    // Events
+    // Events - FIXED: Added missing OnBallCompleted consistently
     public System.Action<Ball> OnBallMissed;
     public System.Action<Ball> OnBallHit;
     public System.Action<Ball> OnBallReachPlayer;
-    // NEW: Event for progressive difficulty integration
-    public System.Action<GameObject> OnBallCompleted;
+    public System.Action<Ball> OnBallCompleted; // FIXED: Changed to Ball parameter for consistency
 
     void Awake()
     {
@@ -83,7 +82,7 @@ public class Ball : MonoBehaviour
         targetPosition = toPosition;
         currentSpeed = speed > 0 ? speed : gameSettings.baseBallSpeed;
 
-        // Calculate trajectory
+        // Calculate trajectory - SIMPLIFIED TO DIRECT PATH
         startPosition = fromPosition;
         targetWorldPosition = new Vector3(
             player.transform.position.x,
@@ -94,7 +93,7 @@ public class Ball : MonoBehaviour
         // Position at start
         transform.position = startPosition;
 
-        // Calculate journey
+        // Calculate journey - DIRECT TRAJECTORY
         journeyLength = Vector3.Distance(startPosition, targetWorldPosition);
         journeyTime = journeyLength / currentSpeed;
 
@@ -110,13 +109,11 @@ public class Ball : MonoBehaviour
         SetupVisualFeedback();
 
         Debug.Log($"Ball launched to {GetPositionName(toPosition)} position, journey time: {journeyTime:F2}s");
-        Debug.Log($"Ball activated: {gameObject.activeInHierarchy}");
-        Debug.Log($"Ball position: {transform.position}");
     }
 
     #endregion
 
-    #region Movement System
+    #region Movement System - SIMPLIFIED DIRECT TRAJECTORY
 
     void UpdateMovement()
     {
@@ -132,14 +129,8 @@ public class Ball : MonoBehaviour
         }
         else
         {
-            // Smooth arc trajectory
+            // SIMPLIFIED: Direct linear trajectory (no arc)
             Vector3 currentPos = Vector3.Lerp(startPosition, targetWorldPosition, progress);
-
-            // Add arc effect (parabolic trajectory)
-            float arcHeight = 0.5f; // Height of the arc
-            float arcProgress = 4f * progress * (1f - progress); // Parabolic curve
-            currentPos.y += arcHeight * arcProgress;
-
             transform.position = currentPos;
 
             // Update hit window
@@ -177,9 +168,6 @@ public class Ball : MonoBehaviour
         // Check if player is in correct position
         bool playerInCorrectPosition = player.GetCurrentPosition() == targetPosition;
         bool playerCanHit = player.CanMove(); // Player not moving
-
-        // Listen for hit attempt from player
-        // (This will be triggered by PlayerController when player presses hit button)
     }
 
     public bool TryHit(int playerPosition)
@@ -187,7 +175,6 @@ public class Ball : MonoBehaviour
         if (!canBeHit)
         {
             Debug.Log("Ball not in hit window!");
-            // Add visual feedback for early/late hits
             StartCoroutine(ShowMissEffect());
             return false;
         }
@@ -195,7 +182,6 @@ public class Ball : MonoBehaviour
         if (playerPosition != targetPosition)
         {
             Debug.Log($"Wrong position! Ball needs {GetPositionName(targetPosition)}, player at {GetPositionName(playerPosition)}");
-            // Add visual feedback for wrong position
             StartCoroutine(ShowWrongPositionEffect());
             return false;
         }
@@ -211,41 +197,31 @@ public class Ball : MonoBehaviour
 
         OnBallHit?.Invoke(this);
 
-        // NEW: Trigger completion event for BallManager
-        OnBallCompleted?.Invoke(gameObject);
-
         Debug.Log($"Perfect hit at {GetPositionName(targetPosition)}! Perfect timing: {isPerfectTiming}");
 
-        // Add visual feedback for successful hit
-        StartCoroutine(ShowHitEffect());
+        // Start hit effect and complete ball lifecycle
+        StartCoroutine(ShowHitEffectAndComplete());
 
         return true;
     }
 
+    // FIXED: Proper missed ball handling
     void CheckFinalHit()
     {
-        if (!canBeHit)
+        // If ball reached player but wasn't hit, it's a miss
+        if (scoreManager != null)
         {
-            // Player missed the ball completely - register miss with ScoreManager
-            if (scoreManager != null)
-            {
-                scoreManager.RegisterMiss();
-            }
-
-            OnBallMissed?.Invoke(this);
-
-            // ADD THIS LINE - Trigger completion event for BallManager  
-            OnBallCompleted?.Invoke(gameObject);
-
-            Debug.Log($"Ball missed at {GetPositionName(targetPosition)} position!");
-
-            // Add visual feedback for complete miss
-            StartCoroutine(ShowCompletelyMissedEffect());
-            return;
+            scoreManager.RegisterMiss();
         }
 
-        DeactivateBall();
+        OnBallMissed?.Invoke(this);
+
+        Debug.Log($"Ball missed at {GetPositionName(targetPosition)} position!");
+
+        // Start miss effect and complete ball lifecycle
+        StartCoroutine(ShowCompletelyMissedEffectAndComplete());
     }
+
     private bool IsInPerfectTimingWindow()
     {
         if (gameSettings == null) return false;
@@ -259,9 +235,9 @@ public class Ball : MonoBehaviour
 
     #endregion
 
-    #region Visual Feedback Effects
+    #region Visual Feedback Effects - FIXED LIFECYCLE MANAGEMENT
 
-    System.Collections.IEnumerator ShowHitEffect()
+    System.Collections.IEnumerator ShowHitEffectAndComplete()
     {
         // Stop the ball from moving first
         isActive = false;
@@ -286,7 +262,33 @@ public class Ball : MonoBehaviour
             }
         }
 
-        DeactivateBall(); // Remove ball after effect
+        // FIXED: Signal completion BEFORE deactivating
+        OnBallCompleted?.Invoke(this);
+        DeactivateBall();
+    }
+
+    System.Collections.IEnumerator ShowCompletelyMissedEffectAndComplete()
+    {
+        // Stop the ball from moving
+        isActive = false;
+
+        // Ball fades to gray when completely missed
+        if (spriteRenderer != null)
+        {
+            Color originalColor = spriteRenderer.color;
+            for (int i = 0; i < 10; i++)
+            {
+                Color fadeColor = Color.Lerp(originalColor, gameSettings.missColor, i / 10f);
+                spriteRenderer.color = fadeColor;
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        // FIXED: Signal completion BEFORE deactivating
+        OnBallCompleted?.Invoke(this);
+        DeactivateBall();
     }
 
     System.Collections.IEnumerator ShowMissEffect()
@@ -321,28 +323,9 @@ public class Ball : MonoBehaviour
         }
     }
 
-    System.Collections.IEnumerator ShowCompletelyMissedEffect()
-    {
-        // Ball fades to gray when completely missed
-        if (spriteRenderer != null)
-        {
-            Color originalColor = spriteRenderer.color;
-            for (int i = 0; i < 10; i++)
-            {
-                Color fadeColor = Color.Lerp(originalColor, gameSettings.missColor, i / 10f);
-                spriteRenderer.color = fadeColor;
-                yield return new WaitForSeconds(0.05f);
-            }
-
-            yield return new WaitForSeconds(0.5f);
-        }
-
-        DeactivateBall();
-    }
-
     #endregion
 
-    #region Original Visual Feedback
+    #region Visual Feedback
 
     void SetupVisualFeedback()
     {
@@ -398,7 +381,7 @@ public class Ball : MonoBehaviour
         canBeHit = false;
         elapsedTime = 0f;
 
-        // Hide ball (or return to pool)
+        // Hide ball
         gameObject.SetActive(false);
     }
 
@@ -430,7 +413,6 @@ public class Ball : MonoBehaviour
     public float GetDistanceToPlayer() => distanceToPlayer;
     public float GetProgress() => journeyTime > 0 ? elapsedTime / journeyTime : 0f;
 
-    // NEW: Progressive difficulty methods
     public void SetSpeed(float speed)
     {
         currentSpeed = speed;

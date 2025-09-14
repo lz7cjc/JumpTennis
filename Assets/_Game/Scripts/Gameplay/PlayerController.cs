@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
@@ -66,14 +66,19 @@ public class PlayerController : MonoBehaviour
             HandleTouchInput();
         }
 
-        // Keyboard input for testing
+        // FIXED: Sequential arrow key movement
         if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
         {
-            MoveToPosition(0); // Top
+            // Move up one position (2→1→0)
+            int newPosition = Mathf.Max(0, currentPosition - 1);
+            MoveToPosition(newPosition);
         }
         else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
         {
-            MoveToPosition(2); // Bottom
+            // Move down one position (0→1→2)
+            int maxPosition = gameSettings.playerPositions.Length - 1;
+            int newPosition = Mathf.Min(maxPosition, currentPosition + 1);
+            MoveToPosition(newPosition);
         }
         else if (Input.GetKeyDown(KeyCode.Space))
         {

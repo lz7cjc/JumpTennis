@@ -56,21 +56,6 @@ public class BallManager : MonoBehaviour
         // Initialize spawn interval
         currentSpawnInterval = baseSpawnInterval;
 
-        // Test ScoreManager methods
-        if (scoreManager != null)
-        {
-            try
-            {
-                float testSpeed = scoreManager.GetCurrentBallSpeed();
-                int testCount = scoreManager.GetBallCountForLevel();
-                Debug.Log($"ScoreManager methods working: Speed={testSpeed}, Count={testCount}");
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogError($"ScoreManager methods failed: {e.Message}");
-            }
-        }
-
         // Validate references
         if (gameSettings == null)
         {
@@ -145,7 +130,7 @@ public class BallManager : MonoBehaviour
 
     void InitializeBallPool()
     {
-        // Create initial pool of balls - increase for multi-ball levels
+        // Create initial pool of balls
         int initialPoolSize = Mathf.Max(gameSettings.maxBalls + 2, 8);
 
         for (int i = 0; i < initialPoolSize; i++)
@@ -159,7 +144,6 @@ public class BallManager : MonoBehaviour
     void CreateNewBall()
     {
         GameObject ballObj = Instantiate(ballPrefab, transform);
-        Debug.Log($"Created ball object: {ballObj.name}");
         Ball ball = ballObj.GetComponent<Ball>();
 
         if (ball == null)
@@ -168,14 +152,17 @@ public class BallManager : MonoBehaviour
             return;
         }
 
-        // Connect events
+        // FIXED: Connect ALL events including OnBallCompleted
         ball.OnBallHit += HandleBallHit;
         ball.OnBallMissed += HandleBallMissed;
         ball.OnBallReachPlayer += HandleBallReachPlayer;
+        ball.OnBallCompleted += HandleBallCompleted; // CRITICAL FIX
 
         // Add to pool
         ballPool.Add(ball);
         ballObj.SetActive(false);
+
+        Debug.Log($"Created ball #{ballPool.Count} with all events connected");
     }
 
     Ball GetBallFromPool()
@@ -192,8 +179,12 @@ public class BallManager : MonoBehaviour
         }
 
         // No inactive balls, create new one
+        Debug.Log("No inactive balls found, creating new one");
         CreateNewBall();
-        return ballPool[ballPool.Count - 1];
+        Ball newBall = ballPool[ballPool.Count - 1];
+        newBall.gameObject.SetActive(true);
+        newBall.ResetBall();
+        return newBall;
     }
 
     void ReturnBallToPool(Ball ball)
@@ -201,6 +192,7 @@ public class BallManager : MonoBehaviour
         if (activeBallsList.Contains(ball))
         {
             activeBallsList.Remove(ball);
+            Debug.Log($"Removed ball from active list. Active balls now: {activeBallsList.Count}");
         }
 
         ball.gameObject.SetActive(false);
@@ -218,7 +210,7 @@ public class BallManager : MonoBehaviour
             StopCoroutine(spawnCoroutine);
         }
 
-        isSpawning = true;  // Set this BEFORE starting coroutine
+        isSpawning = true;
         spawnCoroutine = StartCoroutine(SpawnBallsCoroutine());
         Debug.Log("Ball spawning started");
     }
@@ -241,13 +233,10 @@ public class BallManager : MonoBehaviour
 
         while (isSpawning)
         {
-            Debug.Log("Spawn coroutine loop iteration");
-
             // Check if we should spawn balls
             if (ShouldSpawnBall())
             {
                 int ballsToSpawn = targetBallCount - activeBalls;
-
                 Debug.Log($"Spawning {ballsToSpawn} balls automatically (Target: {targetBallCount}, Active: {activeBalls})");
 
                 // Spawn multiple balls if needed (for multi-ball levels)
@@ -255,23 +244,16 @@ public class BallManager : MonoBehaviour
                 {
                     SpawnRandomBall();
 
-                    // Small delay between simultaneous spawns for visual clarity
+                    // Small delay between simultaneous spawns
                     if (i < ballsToSpawn - 1)
                     {
                         yield return new WaitForSeconds(0.3f);
                     }
                 }
+            }
 
-                // Wait for current spawn interval after spawning
-                Debug.Log($"Waiting {currentSpawnInterval} seconds before next spawn check");
-                yield return new WaitForSeconds(currentSpawnInterval);
-            }
-            else
-            {
-                Debug.Log("No spawn needed, checking again in 0.1s");
-                // Check again soon if no spawning needed
-                yield return new WaitForSeconds(0.1f);
-            }
+            // Wait for current spawn interval
+            yield return new WaitForSeconds(currentSpawnInterval);
         }
 
         Debug.Log("SpawnBallsCoroutine ended");
@@ -281,23 +263,18 @@ public class BallManager : MonoBehaviour
     {
         if (gameSettings == null)
         {
-            Debug.LogError("GameSettings is null! Cannot determine spawn rules.");
+            Debug.LogError("GameSettings is null!");
             return false;
         }
-
-        Debug.Log($"ShouldSpawnBall check: activeBalls={activeBalls}, maxBalls={gameSettings.maxBalls}, targetBallCount={targetBallCount}");
 
         // Don't exceed max balls
         if (activeBalls >= gameSettings.maxBalls)
         {
-            Debug.Log("Not spawning: at max balls limit");
             return false;
         }
 
         // Spawn if we have fewer active balls than target count
-        bool shouldSpawn = activeBalls < targetBallCount;
-        Debug.Log($"Should spawn: {shouldSpawn} (need {targetBallCount - activeBalls} more balls)");
-        return shouldSpawn;
+        return activeBalls < targetBallCount;
     }
 
     void SpawnRandomBall()
@@ -305,7 +282,7 @@ public class BallManager : MonoBehaviour
         // Random target position
         int randomPosition = Random.Range(0, gameSettings.playerPositions.Length);
 
-        // Calculate spawn position (opposite side of court from player)
+        // Calculate spawn position
         Vector3 spawnPos = ballSpawnPoint != null ? ballSpawnPoint.position :
                           new Vector3(5f, gameSettings.playerPositions[randomPosition], 0f);
 
@@ -344,7 +321,7 @@ public class BallManager : MonoBehaviour
 
     #endregion
 
-    #region Event Handlers
+    #region Event Handlers - FIXED CRITICAL BUG
 
     void HandlePlayerHitAttempt()
     {
@@ -375,25 +352,33 @@ public class BallManager : MonoBehaviour
         Debug.Log("Ball hit successfully!");
         OnBallHit?.Invoke(ball);
 
-        // Remove from active list but don't deactivate yet
-        // The ball will deactivate itself after the visual effect
-        if (activeBallsList.Contains(ball))
-        {
-            activeBallsList.Remove(ball);
-            activeBalls = activeBallsList.Count;
-        }
+        // NOTE: Don't remove from active list here - wait for OnBallCompleted
+        // The visual effect needs to play first
     }
 
     void HandleBallMissed(Ball ball)
     {
         Debug.Log("Ball was missed!");
-        ReturnBallToPool(ball);
         OnBallMissed?.Invoke(ball);
+
+        // NOTE: Don't return to pool here - wait for OnBallCompleted
+        // The visual effect needs to play first
     }
 
     void HandleBallReachPlayer(Ball ball)
     {
         Debug.Log("Ball reached player zone");
+    }
+
+    // CRITICAL FIX: This was the missing event handler causing the spawning bug
+    void HandleBallCompleted(Ball ball)
+    {
+        Debug.Log($"Ball completed lifecycle - returning to pool");
+
+        // Remove from active list and return to pool
+        ReturnBallToPool(ball);
+
+        Debug.Log($"Ball returned to pool. Active balls: {activeBalls}/{targetBallCount}");
     }
 
     #endregion
@@ -402,7 +387,6 @@ public class BallManager : MonoBehaviour
 
     void Update()
     {
-        // Testing controls (remove later)
         HandleTestingInput();
     }
 
